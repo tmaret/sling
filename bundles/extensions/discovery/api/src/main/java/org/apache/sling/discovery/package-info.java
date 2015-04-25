@@ -21,9 +21,9 @@
  * Provides a service to interface which may be implemented by applications
  * to get notified on cluster topology changes.
  *
- * @version 1.0
+ * @version 1.0.3
  */
-@Version("1.0.2")
+@Version("1.0.3")
 package org.apache.sling.discovery;
 
 import aQute.bnd.annotation.Version;
