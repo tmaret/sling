@@ -32,6 +32,8 @@ import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
 import org.apache.sling.distribution.common.DistributionException;
+import org.apache.sling.distribution.component.impl.SettingsUtils;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
@@ -64,6 +66,12 @@ public class RemoteEventDistributionTriggerFactory implements DistributionTrigge
     DistributionTransportSecretProvider transportSecretProvider;
 
 
+    @Property(name = "transportContextProvider.target", label = "Transport Context Provider", description = "The target reference for the DistributionContextProvider instance used for initializing distribution transport contexts, " +
+            "e.g. use target=(name=...) to bind to services by name.", value = SettingsUtils.COMPONENT_NAME_DEFAULT)
+    @Reference(name = "transportContextProvider")
+    private DistributionContextProvider transportContextProvider;
+
+
     @Reference
     private Scheduler scheduler;
 
@@ -73,7 +81,7 @@ public class RemoteEventDistributionTriggerFactory implements DistributionTrigge
     @Activate
     public void activate(BundleContext bundleContext, Map<String, Object> config) {
         String endpoint = PropertiesUtil.toString(config.get(ENDPOINT), null);
-        trigger = new RemoteEventDistributionTrigger(endpoint, transportSecretProvider, scheduler);
+        trigger = new RemoteEventDistributionTrigger(endpoint, transportSecretProvider, transportContextProvider, scheduler);
     }
 
     @Deactivate

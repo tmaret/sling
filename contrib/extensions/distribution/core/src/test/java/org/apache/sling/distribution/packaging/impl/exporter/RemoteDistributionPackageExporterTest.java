@@ -25,6 +25,7 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.SimpleDistributionRequest;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackageProcessor;
 import org.apache.sling.distribution.serialization.DistributionPackage;
@@ -38,6 +39,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.when;
 
 /**
@@ -49,9 +51,10 @@ public class RemoteDistributionPackageExporterTest {
     public void testNothingExported() throws Exception {
         DistributionPackageBuilder packageBuilder = mock(DistributionPackageBuilder.class);
         DistributionTransportSecretProvider distributionTransportSecretProvider = mock(DistributionTransportSecretProvider.class);
+        DistributionContextProvider distributionContextProvider = null;
         String[] endpoints = new String[0];
         RemoteDistributionPackageExporter remotedistributionPackageExporter = new RemoteDistributionPackageExporter(mock(DefaultDistributionLog.class),
-                packageBuilder, distributionTransportSecretProvider, endpoints, 1);
+                packageBuilder, distributionTransportSecretProvider, distributionContextProvider, endpoints, 1);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionRequest distributionRequest = new SimpleDistributionRequest(DistributionRequestType.ADD, "/");
         final List<DistributionPackage> distributionPackages = new ArrayList<DistributionPackage>();
@@ -69,9 +72,10 @@ public class RemoteDistributionPackageExporterTest {
     public void testFailedPackageRetrieval() throws Exception {
         DistributionPackageBuilder packageBuilder = mock(DistributionPackageBuilder.class);
         DistributionTransportSecretProvider distributionTransportSecretProvider = mock(DistributionTransportSecretProvider.class);
+        DistributionContextProvider distributionContextProvider = null;
         String[] endpoints = new String[0];
         RemoteDistributionPackageExporter remotedistributionPackageExporter = new RemoteDistributionPackageExporter(mock(DefaultDistributionLog.class),
-                packageBuilder, distributionTransportSecretProvider, endpoints, 1);
+                packageBuilder, distributionTransportSecretProvider, distributionContextProvider, endpoints, 1);
 
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionPackage distributionPackage = remotedistributionPackageExporter.getPackage(resourceResolver, "123");

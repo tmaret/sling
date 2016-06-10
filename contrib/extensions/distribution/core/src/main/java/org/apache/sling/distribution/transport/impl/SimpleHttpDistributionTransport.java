@@ -22,28 +22,26 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.InputStream;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.http.HttpHost;
 import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.fluent.Executor;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.conn.HttpHostConnectException;
 import org.apache.http.entity.ContentType;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.common.RecoverableDistributionException;
+import org.apache.sling.distribution.context.DistributionContext;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.transport.DistributionTransportSecret;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.util.RequestUtils;
 
@@ -52,8 +50,6 @@ import org.apache.sling.distribution.util.RequestUtils;
  */
 public class SimpleHttpDistributionTransport implements DistributionTransport {
 
-    private static final String USERNAME = "username";
-    private static final String PASSWORD = "password";
     private static final String EXECUTOR_CONTEXT_KEY_PREFIX = "ExecutorContextKey";
 
     /**
@@ -61,11 +57,24 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
      */
     private static final String PACKAGE_INFO_PROPERTY_ORIGIN_URI = "internal.origin.uri";
 
+
+    /**
+     * Pooling connection manager shared among all distribution transports
+     */
+    private static final PoolingHttpClientConnectionManager CONNMGR;
+
+    static {
+        CONNMGR = new PoolingHttpClientConnectionManager();
+        CONNMGR.setDefaultMaxPerRoute(100);
+        CONNMGR.setMaxTotal(200);
+    }
+
     private final DefaultDistributionLog log;
     private final DistributionEndpoint distributionEndpoint;
     private final DistributionPackageBuilder packageBuilder;
     private final DistributionTransportSecretProvider secretProvider;
     private final String contextKeyExecutor;
+
 
     public SimpleHttpDistributionTransport(DefaultDistributionLog log, DistributionEndpoint distributionEndpoint,
                                            DistributionPackageBuilder packageBuilder,
@@ -78,7 +87,7 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
         this.contextKeyExecutor = EXECUTOR_CONTEXT_KEY_PREFIX + "_" + getHostAndPort(distributionEndpoint.getUri()) + "_" + UUID.randomUUID();
     }
 
-    public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage, @Nonnull DistributionTransportContext distributionContext) throws DistributionException {
+    public void deliverPackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionPackage distributionPackage, @Nonnull DistributionContext transportContext) throws DistributionException {
         String hostAndPort = getHostAndPort(distributionEndpoint.getUri());
 
         URI packageOrigin = distributionPackage.getInfo().get(PACKAGE_INFO_PROPERTY_ORIGIN_URI, URI.class);
@@ -88,7 +97,7 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
         } else {
 
             try {
-                Executor executor = getExecutor(distributionContext);
+                Executor executor = getExecutor(transportContext);
 
                 Request req = Request.Post(distributionEndpoint.getUri()).useExpectContinue();
 
@@ -122,13 +131,13 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
     }
 
     @Nullable
-    public RemoteDistributionPackage retrievePackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest, @Nonnull DistributionTransportContext distributionContext) throws DistributionException {
+    public RemoteDistributionPackage retrievePackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest distributionRequest, @Nonnull DistributionContext transportContext) throws DistributionException {
         log.debug("pulling from {}", distributionEndpoint.getUri());
 
         try {
             URI distributionURI = RequestUtils.appendDistributionRequest(distributionEndpoint.getUri(), distributionRequest);
 
-            Executor executor = getExecutor(distributionContext);
+            Executor executor = getExecutor(transportContext);
 
             // TODO : add queue parameter
             InputStream inputStream = HttpTransportUtils.fetchNextPackage(executor, distributionURI);
@@ -151,34 +160,24 @@ public class SimpleHttpDistributionTransport implements DistributionTransport {
         return null;
     }
 
-    private Executor authenticate(DistributionTransportSecret secret, Executor executor) {
-        Map<String, String> credentialsMap = secret.asCredentialsMap();
-        if (credentialsMap != null) {
-            URI uri = distributionEndpoint.getUri();
-            executor = executor.auth(new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme()),
-                    credentialsMap.get(USERNAME), credentialsMap.get(PASSWORD)).authPreemptive(
-                    new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme()));
-            log.debug("authenticate user={}, endpoint={}", secret.asCredentialsMap().get(USERNAME), distributionEndpoint.getUri());
-        }
-        return executor;
-    }
-
     private String getHostAndPort(URI uri) {
         return uri.getHost() + ":" + uri.getPort();
     }
 
 
-    private Executor getExecutor(DistributionTransportContext distributionContext) {
-        if (distributionContext.containsKey(contextKeyExecutor)) {
-            return distributionContext.get(contextKeyExecutor, Executor.class);
+    private Executor getExecutor(DistributionContext transportContext) {
+        if (transportContext.containsKey(contextKeyExecutor)) {
+            return transportContext.get(contextKeyExecutor, Executor.class);
         }
 
-        Executor executor = Executor.newInstance();
+        HttpClientBuilder clientBuilder = HttpClientBuilders.syncClientBuilder(secretProvider,
+                transportContext, distributionEndpoint);
 
-        DistributionTransportSecret secret = secretProvider.getSecret(distributionEndpoint.getUri());
-        executor = authenticate(secret, executor);
+        clientBuilder.setConnectionManager(CONNMGR);
 
-        distributionContext.put(contextKeyExecutor, executor);
+        Executor executor = Executor.newInstance(clientBuilder.build());
+
+        transportContext.put(contextKeyExecutor, executor);
 
         return executor;
     }

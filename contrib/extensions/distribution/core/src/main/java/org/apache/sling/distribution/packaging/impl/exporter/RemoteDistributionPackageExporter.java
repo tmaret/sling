@@ -19,24 +19,28 @@
 package org.apache.sling.distribution.packaging.impl.exporter;
 
 import javax.annotation.Nonnull;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.common.DistributionException;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.DistributionPackageProcessor;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
+import org.apache.sling.distribution.context.DistributionContext;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
-import org.apache.sling.distribution.transport.impl.DistributionTransportContext;
 import org.apache.sling.distribution.transport.impl.DistributionTransport;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
 import org.apache.sling.distribution.transport.impl.RemoteDistributionPackage;
+import org.apache.sling.distribution.transport.impl.SimpleDistributionTransportContext;
 import org.apache.sling.distribution.transport.impl.SimpleHttpDistributionTransport;
 
 /**
@@ -46,13 +50,14 @@ public class RemoteDistributionPackageExporter implements DistributionPackageExp
 
     private final DistributionPackageBuilder packageBuilder;
     private final int maxPullItems;
-    private final DistributionTransportContext distributionContext = new DistributionTransportContext();
 
+    private final DistributionContext transportContext;
 
     private final List<DistributionTransport> transportHandlers = new ArrayList<DistributionTransport>();
 
     public RemoteDistributionPackageExporter(DefaultDistributionLog log, DistributionPackageBuilder packageBuilder,
                                              DistributionTransportSecretProvider secretProvider,
+                                             DistributionContextProvider transportContextProvider,
                                              String[] endpoints,
                                              int maxPullItems) {
         this.maxPullItems = maxPullItems;
@@ -63,6 +68,11 @@ public class RemoteDistributionPackageExporter implements DistributionPackageExp
         if (secretProvider == null) {
             throw new IllegalArgumentException("distributionTransportSecretProvider is required");
         }
+
+        transportContext = (transportContextProvider != null)
+                ? transportContextProvider.getContext(new HashMap<String, Object>())
+                : new SimpleDistributionTransportContext();
+        log.info("Transport Context initialized with keys: {}", transportContext.keySet());
 
         this.packageBuilder = packageBuilder;
 
@@ -79,7 +89,7 @@ public class RemoteDistributionPackageExporter implements DistributionPackageExp
             int noPackages = 0;
 
             RemoteDistributionPackage retrievedPackage;
-            while (noPackages < maxNumberOfPackages && ((retrievedPackage = distributionTransport.retrievePackage(resourceResolver, distributionRequest, distributionContext)) != null)) {
+            while (noPackages < maxNumberOfPackages && ((retrievedPackage = distributionTransport.retrievePackage(resourceResolver, distributionRequest, transportContext)) != null)) {
 
                 DistributionPackage distributionPackage = retrievedPackage.getPackage();
 

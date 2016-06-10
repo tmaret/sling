@@ -25,15 +25,17 @@ import java.util.Map;
 
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.common.DistributionException;
+import org.apache.sling.distribution.context.DistributionContext;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
-import org.apache.sling.distribution.transport.impl.DistributionTransportContext;
 import org.apache.sling.distribution.transport.impl.DistributionTransport;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
+import org.apache.sling.distribution.transport.impl.SimpleDistributionTransportContext;
 import org.apache.sling.distribution.transport.impl.SimpleHttpDistributionTransport;
 
 /**
@@ -42,14 +44,19 @@ import org.apache.sling.distribution.transport.impl.SimpleHttpDistributionTransp
 public class RemoteDistributionPackageImporter implements DistributionPackageImporter {
 
     private final Map<String, DistributionTransport> transportHandlers = new HashMap<String, DistributionTransport>();
-    private final DistributionTransportContext distributionContext = new DistributionTransportContext();
+
+    private final DistributionContext transportContext;
 
     public RemoteDistributionPackageImporter(DefaultDistributionLog log, DistributionTransportSecretProvider distributionTransportSecretProvider,
-                                             Map<String, String> endpointsMap) {
+                                             DistributionContextProvider transportContextProvider, Map<String, String> endpointsMap) {
         if (distributionTransportSecretProvider == null) {
             throw new IllegalArgumentException("distributionTransportSecretProvider is required");
         }
 
+        transportContext = (transportContextProvider != null)
+                ? transportContextProvider.getContext(new HashMap<String, Object>())
+                : new SimpleDistributionTransportContext();
+        log.info("Transport Context initialized with keys: {}", transportContext.keySet());
 
         for (Map.Entry<String, String> entry : endpointsMap.entrySet()) {
             String endpointKey = entry.getKey();
@@ -67,10 +74,10 @@ public class RemoteDistributionPackageImporter implements DistributionPackageImp
         DistributionTransport distributionTransport = transportHandlers.get(queueName);
 
         if (distributionTransport != null) {
-            distributionTransport.deliverPackage(resourceResolver, distributionPackage, distributionContext);
+            distributionTransport.deliverPackage(resourceResolver, distributionPackage, transportContext);
         } else {
             for(DistributionTransport transportHandler: transportHandlers.values()) {
-                transportHandler.deliverPackage(resourceResolver, distributionPackage, distributionContext);
+                transportHandler.deliverPackage(resourceResolver, distributionPackage, transportContext);
             }
         }
     }

@@ -34,6 +34,7 @@ import org.apache.sling.distribution.component.impl.DistributionComponentConstan
 import org.apache.sling.distribution.component.impl.DistributionComponentKind;
 import org.apache.sling.distribution.component.impl.SettingsUtils;
 import org.apache.sling.distribution.common.DistributionException;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
@@ -54,27 +55,27 @@ import org.slf4j.LoggerFactory;
 @Property(name="webconsole.configurationFactory.nameHint", value="Importer name: {name}")
 public class RemoteDistributionPackageImporterFactory implements DistributionPackageImporter {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
-
-
     /**
      * name of this importer.
      */
     @Property(label = "Name", description = "The name of the importer.")
     private static final String NAME = DistributionComponentConstants.PN_NAME;
-
-
     /**
      * endpoints property
      */
     @Property(cardinality = 100, label = "Endpoints", description = "The list of endpoints to which the packages will be imported.")
     private static final String ENDPOINTS = "endpoints";
-
+    private final Logger log = LoggerFactory.getLogger(getClass());
     @Property(name = "transportSecretProvider.target", label = "Transport Secret Provider", description = "The target reference for the DistributionTransportSecretProvider used to obtain the credentials used for accessing the remote endpoints, " +
             "e.g. use target=(name=...) to bind to services by name.")
     @Reference(name = "transportSecretProvider")
     private
     DistributionTransportSecretProvider transportSecretProvider;
+
+    @Property(name = "transportContextProvider.target", label = "Transport Context Provider", description = "The target reference for the DistributionContextProvider instance used for initializing distribution transport contexts, " +
+            "e.g. use target=(name=...) to bind to services by name.", value = SettingsUtils.COMPONENT_NAME_DEFAULT)
+    @Reference(name = "transportContextProvider")
+    private DistributionContextProvider transportContextProvider;
 
     private DistributionPackageImporter importer;
 
@@ -87,7 +88,7 @@ public class RemoteDistributionPackageImporterFactory implements DistributionPac
 
         DefaultDistributionLog distributionLog = new DefaultDistributionLog(DistributionComponentKind.IMPORTER, importerName, RemoteDistributionPackageImporter.class, DefaultDistributionLog.LogLevel.ERROR);
 
-        importer = new RemoteDistributionPackageImporter(distributionLog, transportSecretProvider, endpoints);
+        importer = new RemoteDistributionPackageImporter(distributionLog, transportSecretProvider, transportContextProvider, endpoints);
 
     }
 

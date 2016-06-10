@@ -19,6 +19,7 @@
 package org.apache.sling.distribution.packaging.impl.exporter;
 
 import javax.annotation.Nonnull;
+
 import java.util.Map;
 
 import org.apache.felix.scr.annotations.Activate;
@@ -40,6 +41,7 @@ import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageProcessor;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,26 +60,22 @@ import org.slf4j.LoggerFactory;
 public class RemoteDistributionPackageExporterFactory implements DistributionPackageExporter {
 
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
-
     /**
      * name of this exporter.
      */
     @Property(label = "Name", description = "The name of the exporter.")
     private static final String NAME = DistributionComponentConstants.PN_NAME;
-
     /**
      * endpoints property
      */
     @Property(cardinality = 100, label = "Endpoints", description = "The list of endpoints from which the packages will be exported.")
     private static final String ENDPOINTS = "endpoints";
-
     /**
      * no. of items to poll property
      */
     @Property(label = "Pull Items", description = "number of subsequent pull requests to make", intValue = 1)
     private static final String PULL_ITEMS = "pull.items";
-
+    private final Logger log = LoggerFactory.getLogger(getClass());
     @Property(name = "packageBuilder.target", label = "Package Builder", description = "The target reference for the DistributionPackageBuilder used to create distribution packages, " +
             "e.g. use target=(name=...) to bind to services by name.", value = SettingsUtils.COMPONENT_NAME_DEFAULT)
     @Reference(name = "packageBuilder")
@@ -90,11 +88,17 @@ public class RemoteDistributionPackageExporterFactory implements DistributionPac
     private
     DistributionTransportSecretProvider transportSecretProvider;
 
+    @Property(name = "transportContextProvider.target", label = "Transport Context Provider", description = "The target reference for the DistributionContextProvider instance used for initializing distribution transport contexts, " +
+            "e.g. use target=(name=...) to bind to services by name.", value = SettingsUtils.COMPONENT_NAME_DEFAULT)
+    @Reference(name = "transportContextProvider")
+    private DistributionContextProvider transportContextProvider;
+
     private DistributionPackageExporter exporter;
 
     @Activate
     protected void activate(Map<String, Object> config) throws Exception {
-        log.info("activating remote exporter with pb {} and dtsp {}", packageBuilder, transportSecretProvider);
+        log.info("activating remote exporter with pb {} and dtsp {} and tcp {}", new Object[]{packageBuilder,
+                transportSecretProvider, transportContextProvider});
 
         String[] endpoints = PropertiesUtil.toStringArray(config.get(ENDPOINTS), new String[0]);
         endpoints = SettingsUtils.removeEmptyEntries(endpoints);
@@ -107,8 +111,7 @@ public class RemoteDistributionPackageExporterFactory implements DistributionPac
 
         DefaultDistributionLog distributionLog = new DefaultDistributionLog(DistributionComponentKind.EXPORTER, exporterName, RemoteDistributionPackageExporter.class, DefaultDistributionLog.LogLevel.ERROR);
 
-
-        exporter = new RemoteDistributionPackageExporter(distributionLog, packageBuilder, transportSecretProvider, endpoints, pollItems);
+        exporter = new RemoteDistributionPackageExporter(distributionLog, packageBuilder, transportSecretProvider, transportContextProvider, endpoints, pollItems);
     }
 
 

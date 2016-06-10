@@ -19,6 +19,7 @@
 package org.apache.sling.distribution.packaging.impl.importer;
 
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageInfo;
@@ -39,9 +40,10 @@ public class RemoteDistributionPackageImporterTest {
     @Test
     public void testDummyImport() throws Exception {
         DistributionTransportSecretProvider distributionTransportSecretProvider = mock(DistributionTransportSecretProvider.class);
+        DistributionContextProvider transportContextProvider = null;
         Map<String, String> endpoints = new HashMap<String, String>();
         RemoteDistributionPackageImporter remotedistributionPackageImporter = new RemoteDistributionPackageImporter(mock(DefaultDistributionLog.class),
-                distributionTransportSecretProvider, endpoints);
+                distributionTransportSecretProvider, transportContextProvider, endpoints);
         endpoints.put("default","http://endpoint");
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionPackage distributionPackage = mock(DistributionPackage.class);

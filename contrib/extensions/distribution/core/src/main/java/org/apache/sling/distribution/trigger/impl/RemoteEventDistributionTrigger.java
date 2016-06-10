@@ -19,6 +19,7 @@
 package org.apache.sling.distribution.trigger.impl;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -27,15 +28,10 @@ import java.util.concurrent.Future;
 
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.URIUtils;
 import org.apache.http.concurrent.FutureCallback;
-import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
-import org.apache.http.impl.nio.client.HttpAsyncClients;
 import org.apache.http.nio.ContentDecoder;
 import org.apache.http.nio.IOControl;
 import org.apache.http.nio.protocol.BasicAsyncRequestProducer;
@@ -46,8 +42,10 @@ import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.SimpleDistributionRequest;
 import org.apache.sling.distribution.common.DistributionException;
+import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
+import org.apache.sling.distribution.transport.impl.HttpClientBuilders;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.slf4j.Logger;
@@ -64,12 +62,11 @@ public class RemoteEventDistributionTrigger implements DistributionTrigger {
 
     private final DistributionEndpoint endpoint;
     private final DistributionTransportSecretProvider distributionTransportSecretProvider;
-
+    private final DistributionContextProvider transportContextProvider;
+    private final Map<DistributionRequestHandler, Future<HttpResponse>> requests = new ConcurrentHashMap<DistributionRequestHandler, Future<HttpResponse>>();
     private Scheduler scheduler;
 
-    private final Map<DistributionRequestHandler, Future<HttpResponse>> requests = new ConcurrentHashMap<DistributionRequestHandler, Future<HttpResponse>>();
-
-    public RemoteEventDistributionTrigger(String endpoint, DistributionTransportSecretProvider distributionTransportSecretProvider, Scheduler scheduler) {
+    public RemoteEventDistributionTrigger(String endpoint, DistributionTransportSecretProvider distributionTransportSecretProvider, DistributionContextProvider transportContextProvider, Scheduler scheduler) {
         if (endpoint == null) {
             throw new IllegalArgumentException("Endpoint is required");
         }
@@ -78,7 +75,12 @@ public class RemoteEventDistributionTrigger implements DistributionTrigger {
             throw new IllegalArgumentException("Authentication provider is required");
         }
 
+        if (transportContextProvider == null) {
+            throw new IllegalArgumentException("Transport Context Provider is required");
+        }
+
         this.distributionTransportSecretProvider = distributionTransportSecretProvider;
+        this.transportContextProvider = transportContextProvider;
         this.endpoint = new DistributionEndpoint(endpoint);
         this.scheduler = scheduler;
     }
@@ -107,6 +109,14 @@ public class RemoteEventDistributionTrigger implements DistributionTrigger {
 
     private String getJobName(DistributionRequestHandler requestHandler) {
         return SCHEDULE_NAME + requestHandler.toString();
+    }
+
+    public void disable() {
+
+        for (Map.Entry<DistributionRequestHandler, Future<HttpResponse>> entry : requests.entrySet()) {
+            entry.getValue().cancel(true);
+            scheduler.unschedule(getJobName(entry.getKey()));
+        }
     }
 
     private class SSEResponseConsumer extends BasicAsyncResponseConsumer {
@@ -157,18 +167,8 @@ public class RemoteEventDistributionTrigger implements DistributionTrigger {
 
                 // TODO : http client should be cached and reused
 
-                CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-
-                Map<String, String> credentialsMap = distributionTransportSecretProvider.getSecret(endpoint.getUri()).asCredentialsMap();
-                if (credentialsMap != null) {
-                    String username = credentialsMap.get("username");
-                    String password = credentialsMap.get("password");
-                    credentialsProvider.setCredentials(new AuthScope(new HttpHost(endpoint.getUri().getHost(), endpoint.getUri().getPort())),
-                            new UsernamePasswordCredentials(username, password));
-
-                    final CloseableHttpAsyncClient httpClient = HttpAsyncClients.custom()
-                            .setDefaultCredentialsProvider(credentialsProvider)
-                            .build();
+                final CloseableHttpAsyncClient httpClient = HttpClientBuilders.asyncClientBuilder(
+                        distributionTransportSecretProvider, transportContextProvider.getContext(), endpoint).build();
 
                     HttpGet get = new HttpGet(endpoint.getUri());
                     HttpHost target = URIUtils.extractHost(get.getURI());
@@ -199,18 +199,9 @@ public class RemoteEventDistributionTrigger implements DistributionTrigger {
                     }
                     httpClient.close();
                     log.debug("request finished");
-                }
             } catch (Exception e) {
                 log.error("cannot run event based distribution {}", e);
             }
-        }
-    }
-
-    public void disable() {
-
-        for (Map.Entry<DistributionRequestHandler, Future<HttpResponse>> entry : requests.entrySet()) {
-            entry.getValue().cancel(true);
-            scheduler.unschedule(getJobName(entry.getKey()));
         }
     }
 }

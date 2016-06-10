@@ -17,15 +17,8 @@
  * under the License.
  */
 
-package org.apache.sling.distribution.transport.impl;
+@Version("0.1.0")
+package org.apache.sling.distribution.context;
 
-import java.util.HashMap;
+import aQute.bnd.annotation.Version;
 
-import org.apache.sling.api.wrappers.ValueMapDecorator;
-
-public class DistributionTransportContext extends ValueMapDecorator {
-
-    public DistributionTransportContext() {
-        super(new HashMap<String, Object>());
-    }
-}
