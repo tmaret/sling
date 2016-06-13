@@ -29,7 +29,7 @@ import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.distribution.context.DistributionContext;
 import org.apache.sling.distribution.context.DistributionContextProvider;
-import org.apache.sling.distribution.transport.impl.SimpleDistributionTransportContext;
+import org.apache.sling.distribution.transport.impl.SimpleDistributionContext;
 
 @Component(metatype = true,
         label = "Apache Sling Distribution Simple Transport Context Provider",
@@ -43,12 +43,12 @@ public class SimpleDistributionContextProvider implements DistributionContextPro
     @Nonnull
     @Override
     public DistributionContext getContext(@Nullable Map<String, Object> properties) {
-        return new SimpleDistributionTransportContext();
+        return new SimpleDistributionContext();
     }
 
     @Nonnull
     @Override
     public DistributionContext getContext() {
-        return new SimpleDistributionTransportContext();
+        return new SimpleDistributionContext();
     }
 }

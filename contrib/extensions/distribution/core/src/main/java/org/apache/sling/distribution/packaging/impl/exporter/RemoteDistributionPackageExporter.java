@@ -40,7 +40,7 @@ import org.apache.sling.distribution.transport.DistributionTransportSecretProvid
 import org.apache.sling.distribution.transport.impl.DistributionTransport;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
 import org.apache.sling.distribution.transport.impl.RemoteDistributionPackage;
-import org.apache.sling.distribution.transport.impl.SimpleDistributionTransportContext;
+import org.apache.sling.distribution.transport.impl.SimpleDistributionContext;
 import org.apache.sling.distribution.transport.impl.SimpleHttpDistributionTransport;
 
 /**
@@ -71,7 +71,7 @@ public class RemoteDistributionPackageExporter implements DistributionPackageExp
 
         transportContext = (transportContextProvider != null)
                 ? transportContextProvider.getContext(new HashMap<String, Object>())
-                : new SimpleDistributionTransportContext();
+                : new SimpleDistributionContext();
         log.info("Transport Context initialized with keys: {}", transportContext.keySet());
 
         this.packageBuilder = packageBuilder;

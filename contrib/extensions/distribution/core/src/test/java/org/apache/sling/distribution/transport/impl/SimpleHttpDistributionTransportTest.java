@@ -75,7 +75,7 @@ public class SimpleHttpDistributionTransportTest {
         when(distributionPackage.getInfo()).thenReturn(new DistributionPackageInfo("type"));
         InputStream stream = mock(InputStream.class);
         when(distributionPackage.createInputStream()).thenReturn(stream);
-        SimpleDistributionTransportContext distributionContext = mock(SimpleDistributionTransportContext.class);
+        SimpleDistributionContext distributionContext = mock(SimpleDistributionContext.class);
         when(distributionContext.get(any(String.class), any(Class.class))).thenReturn(executor);
         when(distributionContext.containsKey(any(String.class))).thenReturn(true);
         simpleHttpDistributionTransport.deliverPackage(resourceResolver, distributionPackage, distributionContext);
@@ -105,7 +105,7 @@ public class SimpleHttpDistributionTransportTest {
                 endpoint, packageBuilder, secretProvider);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionRequest distributionRequest = new SimpleDistributionRequest(DistributionRequestType.ADD, "/");
-        RemoteDistributionPackage retrievedPackage = simpleHttpDistributionTransport.retrievePackage(resourceResolver, distributionRequest, new SimpleDistributionTransportContext());
+        RemoteDistributionPackage retrievedPackage = simpleHttpDistributionTransport.retrievePackage(resourceResolver, distributionRequest, new SimpleDistributionContext());
         assertNull(retrievedPackage);
     }
 
@@ -140,7 +140,7 @@ public class SimpleHttpDistributionTransportTest {
                 endpoint, packageBuilder, secretProvider);
         ResourceResolver resourceResolver = mock(ResourceResolver.class);
         DistributionRequest distributionRequest = new SimpleDistributionRequest(DistributionRequestType.ADD, "/");
-        SimpleDistributionTransportContext distributionContext = mock(SimpleDistributionTransportContext.class);
+        SimpleDistributionContext distributionContext = mock(SimpleDistributionContext.class);
         when(distributionContext.get(any(String.class), any(Class.class))).thenReturn(executor);
         when(distributionContext.containsKey(any(String.class))).thenReturn(true);
 

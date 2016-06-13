@@ -28,14 +28,14 @@ import org.apache.sling.distribution.context.DistributionContext;
  * Simple {@link DistributionContext} distribution context implementation.
  * The context allow to read and write properties.
  */
-public class SimpleDistributionTransportContext extends ModifiableValueMapDecorator
+public class SimpleDistributionContext extends ModifiableValueMapDecorator
         implements DistributionContext {
 
-    public SimpleDistributionTransportContext(Map<String, Object> base) {
+    public SimpleDistributionContext(Map<String, Object> base) {
         super(base);
     }
 
-    public SimpleDistributionTransportContext() {
+    public SimpleDistributionContext() {
         this(new HashMap<String, Object>());
     }
 }
