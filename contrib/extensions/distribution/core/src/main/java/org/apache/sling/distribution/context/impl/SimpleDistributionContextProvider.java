@@ -27,6 +27,7 @@ import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Service;
+import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
 import org.apache.sling.distribution.context.DistributionContext;
 import org.apache.sling.distribution.context.DistributionContextProvider;
 import org.apache.sling.distribution.transport.impl.SimpleDistributionContext;
@@ -40,10 +41,16 @@ import org.apache.sling.distribution.transport.impl.SimpleDistributionContext;
 @Property(name="webconsole.configurationFactory.nameHint", value="Context provider name: {name}")
 public class SimpleDistributionContextProvider implements DistributionContextProvider {
 
+    /**
+     * name of this component.
+     */
+    @Property(label = "Name")
+    public static final String NAME = DistributionComponentConstants.PN_NAME;
+
     @Nonnull
     @Override
     public DistributionContext getContext(@Nullable Map<String, Object> properties) {
-        return new SimpleDistributionContext();
+        return (properties != null) ? new SimpleDistributionContext(properties) : getContext();
     }
 
     @Nonnull
