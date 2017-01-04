@@ -21,7 +21,9 @@ package org.apache.sling.tenant.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Dictionary;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +51,7 @@ import org.apache.sling.api.resource.ResourceUtil;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.commons.osgi.ServiceUtil;
 import org.apache.sling.tenant.Tenant;
+import org.apache.sling.tenant.TenantConstants;
 import org.apache.sling.tenant.TenantManager;
 import org.apache.sling.tenant.TenantProvider;
 import org.apache.sling.tenant.internal.console.WebConsolePlugin;
@@ -59,6 +62,8 @@ import org.osgi.framework.Constants;
 import org.osgi.framework.Filter;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.InvalidSyntaxException;
+import org.osgi.service.event.Event;
+import org.osgi.service.event.EventAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,6 +121,12 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
 
     @Reference
     private ResourceResolverFactory factory;
+
+    /**
+     * The service tracker for the event admin
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL_UNARY, policy = ReferencePolicy.DYNAMIC)
+    private volatile EventAdmin eventAdmin;
 
     private TenantAdapterFactory adapterFactory;
 
@@ -250,6 +261,10 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
                     // resource
                     tenant.loadProperties(tenantRes);
 
+                    // post tenant created event
+                    sendEvent(TenantConstants.TOPIC_TENANT_CREATED,
+                            tenant.getId(), TenantImpl.getProperties(tenant), null, null);
+
                     return tenant;
 
                 } catch (PersistenceException e) {
@@ -272,6 +287,7 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
                 try {
                     Resource tenantRes = getTenantResource(resolver, tenant.getId());
                     if (tenantRes != null) {
+                        final Map<String, Object> oldProps = TenantImpl.getProperties(tenant);
                         // call tenant setup handler
                         for (TenantCustomizer ts : getTenantHandlers()) {
                             try {
@@ -291,6 +307,10 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
 
                         resolver.delete(tenantRes);
                         resolver.commit();
+
+                        // post tenant removed event
+                        sendEvent(TenantConstants.TOPIC_TENANT_REMOVED,
+                                tenant.getId(), null, null, oldProps);
                     }
                 } catch (PersistenceException e) {
                     log.error("remove({}): Cannot persist Tenant removal", tenant.getId(), e);
@@ -384,7 +404,6 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
     }
 
     private void customizeTenant(final Resource tenantRes, final Tenant tenant, boolean isCreate) {
-
         // call tenant setup handler
         Map<String, Object> tenantProps = tenantRes.adaptTo(ModifiableValueMap.class);
         if (tenantProps == null) {
@@ -417,6 +436,29 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
         }
     }
 
+    private void sendEvent(final String topic, final String tenantId, final Map<String, Object> addedProps,
+                           final Map<String, Object> updatedProps, final Map<String, Object> removedProps) {
+        EventAdmin eventAdmin = this.eventAdmin;
+        if (eventAdmin != null) {
+            final Dictionary<String, Object> props = new Hashtable<String, Object>();
+            props.put(TenantConstants.PROPERTY_TENANT_ID, tenantId);
+            setEventProperties(props,
+                    TenantConstants.PROPERTIES_ADDED, addedProps);
+            setEventProperties(props,
+                    TenantConstants.PROPERTIES_UPDATED, updatedProps);
+            setEventProperties(props,
+                    TenantConstants.PROPERTIES_REMOVED, removedProps);
+            eventAdmin.postEvent(new Event(topic, props));
+        }
+    }
+
+    private void setEventProperties(final Dictionary<String, Object> event, final String propertyType,
+                               final Map<String, Object> properties) {
+        if (properties != null && properties.size() > 0) {
+            event.put(propertyType, properties);
+        }
+    }
+
     private <T> T call(ResourceResolverTask<T> task) {
         ResourceResolver resolver = null;
         T result = null;
@@ -442,6 +484,9 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
                 try {
                     Resource tenantRes = getTenantResource(resolver, tenant.getId());
                     if (tenantRes != null) {
+
+                        final Map<String, Object> oldProps = TenantImpl.getProperties(tenant);
+
                         updater.update(tenantRes.adaptTo(ModifiableValueMap.class));
 
                         //refresh so that customizer gets a refreshed tenant instance
@@ -450,10 +495,47 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
                         }
 
                         customizeTenant(tenantRes, tenant, false);
-                        resolver.commit();
+                        if (resolver.hasChanges()) {
+                            resolver.commit();
 
-                        if (tenant instanceof TenantImpl) {
-                            ((TenantImpl) tenant).loadProperties(tenantRes);
+                            // refresh tenant instance, to see the changes
+                            // done by the customers
+                            if (tenant instanceof TenantImpl) {
+                                ((TenantImpl) tenant).loadProperties(tenantRes);
+                            }
+                        }
+
+                        final Map<String, Object> newProps = TenantImpl.getProperties(tenant);
+
+                        // compute properties changes
+
+                        final Map<String, Object> added = new HashMap<String, Object>();
+                        final Map<String, Object> updated = new HashMap<String, Object>();
+                        final Map<String, Object> removed = new HashMap<String, Object>();
+
+                        // handle new (only in newProps) and updated (in both new and old) entries
+                        for (String key : newProps.keySet()) {
+                            if (oldProps.containsKey(key)) {
+                                if (different(newProps.get(key), oldProps.get(key))) {
+                                    updated.put(key, newProps.get(key));
+                                }
+                            } else {
+                                added.put(key, newProps.get(key));
+                            }
+                        }
+
+                        // handle removed (only in oldProps) entries
+                        for (String key : oldProps.keySet()) {
+                            if (!newProps.containsKey(key)) {
+                                removed.put(key, oldProps.get(key));
+                            }
+                        }
+
+                        // post tenant tenant updated event iff at least one property
+                        // has been modified (added, updated or removed)
+                        if (!added.isEmpty() || !updated.isEmpty() || !removed.isEmpty()) {
+                            sendEvent(TenantConstants.TOPIC_TENANT_UPDATED,
+                                    tenant.getId(), added, updated, removed);
                         }
                     }
                 } catch (PersistenceException pe) {
@@ -471,5 +553,9 @@ public class TenantProviderImpl implements TenantProvider, TenantManager {
 
     private static interface PropertiesUpdater {
         void update(ModifiableValueMap properties);
+    }
+
+    private static boolean different(Object a, Object b) {
+        return !(a == b) && !(a != null && a.equals(b));
     }
 }
