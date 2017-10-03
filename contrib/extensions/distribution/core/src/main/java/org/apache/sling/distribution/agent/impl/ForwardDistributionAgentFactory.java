@@ -52,14 +52,13 @@ import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.packaging.impl.exporter.LocalDistributionPackageExporter;
 import org.apache.sling.distribution.packaging.impl.importer.RemoteDistributionPackageImporter;
+import org.apache.sling.distribution.queue.DistributionQueueFactory;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
 import org.apache.sling.distribution.queue.impl.AsyncDeliveryDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.ErrorQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.MultipleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.PriorityQueueDispatchingStrategy;
-import org.apache.sling.distribution.queue.impl.jobhandling.JobHandlingDistributionQueueProvider;
-import org.apache.sling.distribution.queue.impl.simple.SimpleDistributionQueueProvider;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.impl.HttpConfiguration;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
@@ -168,14 +167,10 @@ public class ForwardDistributionAgentFactory extends AbstractDistributionAgentFa
             "e.g. use target=(name=...) to bind to services by name.")
     public static final String TRIGGERS_TARGET = "triggers.target";
 
-    @Property(options = {
-            @PropertyOption(name = JobHandlingDistributionQueueProvider.TYPE, value = "Sling Jobs"),
-            @PropertyOption(name = SimpleDistributionQueueProvider.TYPE, value = "In-memory"),
-            @PropertyOption(name = SimpleDistributionQueueProvider.TYPE_CHECKPOINT, value = "In-file")},
-            value = "jobs",
-            label = "Queue provider", description = "The queue provider implementation."
-    )
-    public static final String QUEUE_PROVIDER = "queue.provider";
+    @Property(name = "queueFactory.target", label = "Queue Provider Factory", description = "The target reference for the DistributionQueueFactory used to create distribution queue provider, " +
+            "e.g. use target=(type=...) to bind to services by type.", value = "(type=jobs)")
+    @Reference(name = "queueFactory")
+    public DistributionQueueFactory queueFactory;
 
     @Property(boolValue = false, label = "Async delivery", description = "Whether or not to use a separate delivery queue to maximize transport throughput when queue has more than 100 items")
     public static final String ASYNC_DELIVERY = "async.delivery";
@@ -251,15 +246,7 @@ public class ForwardDistributionAgentFactory extends AbstractDistributionAgentFa
 
         DistributionPackageExporter packageExporter = new LocalDistributionPackageExporter(packageBuilder);
 
-        DistributionQueueProvider queueProvider;
-        String queueProviderName = PropertiesUtil.toString(config.get(QUEUE_PROVIDER), JobHandlingDistributionQueueProvider.TYPE);
-        if (JobHandlingDistributionQueueProvider.TYPE.equals(queueProviderName)) {
-            queueProvider = new JobHandlingDistributionQueueProvider(agentName, jobManager, context, configAdmin);
-        } else if (SimpleDistributionQueueProvider.TYPE.equals(queueProviderName)) {
-            queueProvider = new SimpleDistributionQueueProvider(scheduler, agentName, false);
-        } else {
-            queueProvider = new SimpleDistributionQueueProvider(scheduler, agentName, true);
-        }
+        DistributionQueueProvider queueProvider = queueFactory.getQueueProvider(agentName);
         queueProvider = new MonitoringDistributionQueueProvider(queueProvider, context);
 
         DistributionQueueDispatchingStrategy exportQueueStrategy;

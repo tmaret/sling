@@ -47,9 +47,6 @@ import org.slf4j.LoggerFactory;
  */
 public class SimpleDistributionQueueProvider implements DistributionQueueProvider {
 
-    public static final String TYPE = "simple";
-    public static final String TYPE_CHECKPOINT = "simple-checkpoint";
-
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String name;

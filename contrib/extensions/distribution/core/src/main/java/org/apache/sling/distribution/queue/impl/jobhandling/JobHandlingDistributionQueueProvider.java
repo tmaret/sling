@@ -51,8 +51,6 @@ import org.slf4j.LoggerFactory;
  */
 public class JobHandlingDistributionQueueProvider implements DistributionQueueProvider {
 
-    public static final String TYPE = "jobs";
-
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String prefix;

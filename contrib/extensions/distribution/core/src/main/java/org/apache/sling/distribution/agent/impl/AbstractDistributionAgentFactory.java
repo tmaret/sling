@@ -73,6 +73,19 @@ abstract class AbstractDistributionAgentFactory<DistributionAgentMBeanType> {
     void activate(BundleContext context, Map<String, Object> config) {
         log.info("activating with config {}", OsgiUtils.osgiPropertyMapToString(config));
 
+        // SLING-7168
+        Object queueProvider = config.get("queue.provider");
+        if (queueProvider != null) {
+            String msg = "The configuration 'queue.provider' is no longer supported. " +
+                    "Please set the configuration property 'queueFactory.target' in order to specify a Queue Provider.";
+            if ("jobs".equals(queueProvider)) {
+                log.warn(msg);
+            } else {
+                log.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+        }
+
         // inject configuration
         Dictionary<String, Object> props = new Hashtable<String, Object>();
 
